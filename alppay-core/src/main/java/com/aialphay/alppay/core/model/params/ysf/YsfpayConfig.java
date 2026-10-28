@@ -1,0 +1,19 @@
+package com.aialphay.alppay.core.model.params.ysf;
+
+import lombok.Data;
+
+/*
+ * 云闪付 通用配置信息
+ *
+ * @Author nottyjay
+ * @site https://www.aialphay.com
+ * @date 2021/6/8 18:02
+ */
+@Data
+public class YsfpayConfig {
+
+  /** 网关地址 */
+  public static String PROD_SERVER_URL = "https://partner.95516.com";
+
+  public static String SANDBOX_SERVER_URL = "http://ysf.bcbip.cn:10240";
+}

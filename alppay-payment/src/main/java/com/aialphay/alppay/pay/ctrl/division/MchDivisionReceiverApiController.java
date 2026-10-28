@@ -1,0 +1,304 @@
+package com.aialphay.alppay.pay.ctrl.division;
+
+import com.aialphay.alppay.pay.rqrs.division.*;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.aialphay.alppay.core.constants.CS;
+import com.aialphay.alppay.core.entity.MchDivisionReceiver;
+import com.aialphay.alppay.core.entity.MchDivisionReceiverGroup;
+import com.aialphay.alppay.core.entity.MchInfo;
+import com.aialphay.alppay.core.exception.BizException;
+import com.aialphay.alppay.core.model.ApiRes;
+import com.aialphay.alppay.core.utils.SpringBeansUtil;
+import com.aialphay.alppay.pay.channel.IDivisionService;
+import com.aialphay.alppay.pay.ctrl.ApiController;
+import com.aialphay.alppay.pay.model.MchAppConfigContext;
+import com.aialphay.alppay.pay.rqrs.division.*;
+import com.aialphay.alppay.pay.rqrs.msg.ChannelRetMsg;
+import com.aialphay.alppay.pay.service.ConfigContextQueryService;
+import com.aialphay.alppay.service.impl.MchDivisionReceiverGroupService;
+import com.aialphay.alppay.service.impl.MchDivisionReceiverService;
+import com.aialphay.alppay.service.impl.PayInterfaceConfigService;
+import java.math.BigDecimal;
+import java.util.Date;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * 分账账号绑定
+ *
+ * @Author nottyjay
+ * @site https://www.aialphay.com
+ * @date 2021/8/25 9:07
+ */
+@Slf4j
+@RestController
+@RequestMapping("/api/division/receiver")
+public class MchDivisionReceiverApiController extends ApiController {
+
+  @Autowired private ConfigContextQueryService configContextQueryService;
+  @Autowired private PayInterfaceConfigService payInterfaceConfigService;
+  @Autowired private MchDivisionReceiverService mchDivisionReceiverService;
+  @Autowired private MchDivisionReceiverGroupService mchDivisionReceiverGroupService;
+
+  /** 分账账号绑定 * */
+  @PostMapping("/bind")
+  public ApiRes bind() {
+
+    // 获取参数 & 验签
+    DivisionReceiverBindRQ bizRQ = getRQByWithMchSign(DivisionReceiverBindRQ.class);
+
+    try {
+
+      // 检查商户应用是否存在该接口
+      String ifCode = bizRQ.getIfCode();
+
+      // 商户配置信息
+      MchAppConfigContext mchAppConfigContext =
+          configContextQueryService.queryMchInfoAndAppInfo(bizRQ.getMchNo(), bizRQ.getAppId());
+      if (mchAppConfigContext == null) {
+        throw new BizException("获取商户应用信息失败");
+      }
+
+      MchInfo mchInfo = mchAppConfigContext.getMchInfo();
+
+      if (!payInterfaceConfigService.mchAppHasAvailableIfCode(bizRQ.getAppId(), ifCode)) {
+        throw new BizException("商户应用的支付配置不存在或已关闭");
+      }
+
+      MchDivisionReceiverGroup group =
+          mchDivisionReceiverGroupService.findByIdAndMchNo(
+              bizRQ.getReceiverGroupId(), bizRQ.getMchNo());
+      if (group == null) {
+        throw new BizException("商户分账账号组不存在，请检查或进入商户平台进行创建操作");
+      }
+
+      BigDecimal divisionProfit = new BigDecimal(bizRQ.getDivisionProfit());
+      if (divisionProfit.compareTo(BigDecimal.ZERO) <= 0
+          || divisionProfit.compareTo(BigDecimal.ONE) > 1) {
+        throw new BizException("账号分账比例有误, 配置值为[0.0001~1.0000]");
+      }
+
+      // 生成数据库对象信息 （数据不完成， 暂时不可入库操作）
+      MchDivisionReceiver receiver = genRecord(bizRQ, group, mchInfo, divisionProfit);
+
+      // 调起上游接口
+
+      IDivisionService divisionService =
+          SpringBeansUtil.getBean(ifCode + "DivisionService", IDivisionService.class);
+      if (divisionService == null) {
+        throw new BizException("系统不支持该分账接口");
+      }
+
+      ChannelRetMsg retMsg = divisionService.bind(receiver, mchAppConfigContext);
+      if (retMsg.getChannelState() == ChannelRetMsg.ChannelState.CONFIRM_SUCCESS) {
+
+        receiver.setState(CS.YES);
+        receiver.setBindSuccessTime(new Date());
+        mchDivisionReceiverService.save(receiver);
+
+      } else {
+
+        receiver.setState(CS.NO);
+        receiver.setChannelBindResult(retMsg.getChannelErrMsg());
+      }
+
+      DivisionReceiverBindRS bizRes = DivisionReceiverBindRS.buildByRecord(receiver);
+
+      if (retMsg.getChannelState() == ChannelRetMsg.ChannelState.CONFIRM_SUCCESS) {
+
+        bizRes.setBindState(CS.YES);
+
+      } else {
+        bizRes.setBindState(CS.NO);
+        bizRes.setErrCode(retMsg.getChannelErrCode());
+        bizRes.setErrMsg(retMsg.getChannelErrMsg());
+      }
+
+      return ApiRes.okWithSign(bizRes, mchAppConfigContext.getMchApp().getAppSecret());
+
+    } catch (BizException e) {
+      return ApiRes.customFail(e.getMessage());
+
+    } catch (Exception e) {
+      log.error("系统异常：{}", e);
+      return ApiRes.customFail("系统异常");
+    }
+  }
+
+  /** 分账账号修改 * */
+  @PostMapping("/change")
+  public ApiRes change() {
+
+    // 获取参数 & 验签
+    DivisionReceiverChangeRQ bizRQ = getRQByWithMchSign(DivisionReceiverChangeRQ.class);
+
+    try {
+
+      // 商户配置信息
+      MchAppConfigContext mchAppConfigContext =
+        configContextQueryService.queryMchInfoAndAppInfo(bizRQ.getMchNo(), bizRQ.getAppId());
+      if (mchAppConfigContext == null) {
+        throw new BizException("获取商户应用信息失败");
+      }
+
+      MchDivisionReceiver receiver = mchDivisionReceiverService.getById(bizRQ.getReceiverId());
+      if(!receiver.getMchNo().equals(bizRQ.getMchNo())) {
+        throw new BizException("分账接收者 ID 不属于该商户");
+      }
+
+      if(bizRQ.getReceiverGroupId() != null){
+
+        MchDivisionReceiverGroup group =
+            mchDivisionReceiverGroupService.findByIdAndMchNo(
+                bizRQ.getReceiverGroupId(), bizRQ.getMchNo());
+        if (group == null) {
+          throw new BizException("商户分账账号组不存在，请检查或进入商户平台进行创建操作");
+        }
+      }
+
+      if (StringUtils.isNotEmpty(bizRQ.getDivisionProfit())) {
+        BigDecimal divisionProfit = new BigDecimal(bizRQ.getDivisionProfit());
+        if (divisionProfit.compareTo(BigDecimal.ZERO) <= 0
+            || divisionProfit.compareTo(BigDecimal.ONE) > 1) {
+          throw new BizException("账号分账比例有误, 配置值为[0.0001~1.0000]");
+        }
+      }
+
+      MchDivisionReceiver receiverUpdate = new MchDivisionReceiver();
+      BeanUtils.copyProperties(receiver, receiverUpdate);
+
+      LambdaUpdateWrapper<MchDivisionReceiver> updateWrapper = new LambdaUpdateWrapper<>();
+      updateWrapper.eq(MchDivisionReceiver::getReceiverId, bizRQ.getReceiverId());
+      updateWrapper.eq(MchDivisionReceiver::getMchNo, bizRQ.getMchNo());
+
+      mchDivisionReceiverService.update(receiverUpdate, updateWrapper);
+      receiver = mchDivisionReceiverService.getById(bizRQ.getReceiverId());
+
+      DivisionReceiverBindRS bizRes = DivisionReceiverBindRS.buildByRecord(receiver);
+
+      return ApiRes.okWithSign(bizRes, mchAppConfigContext.getMchApp().getAppSecret());
+
+    } catch (BizException e) {
+      return ApiRes.customFail(e.getMessage());
+
+    } catch (Exception e) {
+      log.error("系统异常：{}", e);
+      return ApiRes.customFail("系统异常");
+    }
+  }
+
+  /** 分账账号绑定 * */
+  @PostMapping("/delete")
+  public ApiRes delete() {
+
+    // 获取参数 & 验签
+    DivisionReceiverDeleteRQ bizRQ = getRQByWithMchSign(DivisionReceiverDeleteRQ.class);
+
+    try {
+
+      // 商户配置信息
+      MchAppConfigContext mchAppConfigContext =
+        configContextQueryService.queryMchInfoAndAppInfo(bizRQ.getMchNo(), bizRQ.getAppId());
+      if (mchAppConfigContext == null) {
+        throw new BizException("获取商户应用信息失败");
+      }
+
+      MchInfo mchInfo = mchAppConfigContext.getMchInfo();
+
+      MchDivisionReceiver receiver = mchDivisionReceiverService.getById(bizRQ.getReceiverId());
+      if (receiver == null) {
+        throw new BizException("分账接收者不存在");
+      }
+
+      // 调起上游接口
+//      IDivisionService divisionService =
+//        SpringBeansUtil.getBean(receiver.getIfCode() + "DivisionService", IDivisionService.class);
+//      if (divisionService == null) {
+//        throw new BizException("系统不支持该分账接口");
+//      }
+//
+//      ChannelRetMsg retMsg = divisionService.delete(receiver, mchAppConfigContext);
+//      if (retMsg.getChannelState() == ChannelRetMsg.ChannelState.CONFIRM_SUCCESS) {
+//        mchDivisionReceiverService.removeById(receiver.getReceiverId());
+//      } else {
+//        receiver.setState(CS.NO);
+//        receiver.setChannelBindResult(retMsg.getChannelErrMsg());
+//      }
+      mchDivisionReceiverService.removeById(receiver.getReceiverId());
+
+      DivisionReceiverDeleteRS bizRes = DivisionReceiverDeleteRS.buildByRecord(receiver.getReceiverId());
+
+      return ApiRes.okWithSign(bizRes, mchAppConfigContext.getMchApp().getAppSecret());
+
+    } catch (BizException e) {
+      return ApiRes.customFail(e.getMessage());
+
+    } catch (Exception e) {
+      log.error("系统异常：{}", e);
+      return ApiRes.customFail("系统异常");
+    }
+  }
+
+  private MchDivisionReceiver genRecord(
+      DivisionReceiverBindRQ bizRQ,
+      MchDivisionReceiverGroup group,
+      MchInfo mchInfo,
+      BigDecimal divisionProfit) {
+
+    MchDivisionReceiver receiver = new MchDivisionReceiver();
+    receiver.setReceiverAlias(
+        StringUtils.defaultIfEmpty(bizRQ.getReceiverAlias(), bizRQ.getAccNo())); // 别名
+    receiver.setReceiverGroupId(bizRQ.getReceiverGroupId()); // 分组ID
+    receiver.setReceiverGroupName(group.getReceiverGroupName()); // 组名称
+    receiver.setMchNo(bizRQ.getMchNo()); // 商户号
+    receiver.setIsvNo(mchInfo.getIsvNo()); // isvNo
+    receiver.setAppId(bizRQ.getAppId()); // appId
+    receiver.setIfCode(bizRQ.getIfCode()); // 接口代码
+    receiver.setAccType(bizRQ.getAccType()); // 账号类型
+    receiver.setAccNo(bizRQ.getAccNo()); // 账号
+    receiver.setAccName(bizRQ.getAccName()); // 账号名称
+    receiver.setRelationType(bizRQ.getRelationType()); // 关系
+
+    receiver.setRelationTypeName(getRelationTypeName(bizRQ.getRelationType())); // 关系名称
+
+    if (receiver.getRelationTypeName() == null) {
+      receiver.setRelationTypeName(bizRQ.getRelationTypeName());
+    }
+
+    receiver.setDivisionProfit(divisionProfit); // 分账比例
+    receiver.setChannelExtInfo(bizRQ.getChannelExtInfo()); // 渠道信息
+
+    return receiver;
+  }
+
+  public String getRelationTypeName(String relationType) {
+
+    if ("PARTNER".equals(relationType)) {
+      return "合作伙伴";
+    } else if ("SERVICE_PROVIDER".equals(relationType)) {
+      return "服务商";
+    } else if ("STORE".equals(relationType)) {
+      return "门店";
+    } else if ("STAFF".equals(relationType)) {
+      return "员工";
+    } else if ("STORE_OWNER".equals(relationType)) {
+      return "店主";
+    } else if ("HEADQUARTER".equals(relationType)) {
+      return "总部";
+    } else if ("BRAND".equals(relationType)) {
+      return "品牌方";
+    } else if ("DISTRIBUTOR".equals(relationType)) {
+      return "分销商";
+    } else if ("USER".equals(relationType)) {
+      return "用户";
+    } else if ("SUPPLIER".equals(relationType)) {
+      return "供应商";
+    }
+    return null;
+  }
+}

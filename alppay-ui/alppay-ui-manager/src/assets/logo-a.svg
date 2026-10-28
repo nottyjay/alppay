@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="32px" height="32px" viewBox="0 0 32 32" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>logo-a</title>
+    <defs>
+        <path d="M0,0 L32,0 L32,32 L0,32 L0,0 Z" id="path-1"></path>
+        <linearGradient x1="57.7888867%" y1="79.2972891%" x2="38.5844129%" y2="7.07254278%" id="linearGradient-2">
+            <stop stop-color="#056EFB" offset="0%"></stop>
+            <stop stop-color="#0654B9" offset="57%"></stop>
+            <stop stop-color="#0B4597" offset="100%"></stop>
+        </linearGradient>
+        <linearGradient x1="67.5936159%" y1="10.8361002%" x2="29.534623%" y2="96.4760036%" id="linearGradient-3">
+            <stop stop-color="#DD8786" offset="0%"></stop>
+            <stop stop-color="#D7578A" offset="57%"></stop>
+            <stop stop-color="#BF3688" offset="100%"></stop>
+        </linearGradient>
+        <linearGradient x1="97.9248096%" y1="-0.753295669%" x2="18.8186244%" y2="82.6967985%" id="linearGradient-4">
+            <stop stop-color="#28CEDA" offset="0%"></stop>
+            <stop stop-color="#18B2E4" offset="57%"></stop>
+            <stop stop-color="#0C8AF8" offset="100%"></stop>
+        </linearGradient>
+    </defs>
+    <g id="logo-a" stroke="none" fill="none" xlink:href="#path-1" fill-rule="evenodd" stroke-width="1">
+        <g id="编组">
+            <polygon id="路径" fill="url(#linearGradient-2)" fill-rule="nonzero" points="32 13 23.9323811 32 14 32 16.7190381 25.7558685 22.2710179 13"></polygon>
+            <polygon id="路径" fill="url(#linearGradient-3)" fill-rule="nonzero" points="25 6 22.4556858 12.2884093 16.8729206 25 7 25 9.77174802 18.8105192 15.2023452 6"></polygon>
+            <polygon id="路径" fill="url(#linearGradient-4)" fill-rule="nonzero" points="18 0 15.2978685 6.21167608 9.85589361 19 0 19 8.06704318 0"></polygon>
+        </g>
+    </g>
+</svg>
