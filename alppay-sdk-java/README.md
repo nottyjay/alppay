@@ -22,7 +22,7 @@ mvn -pl alppay-sdk-java -am clean verify
 mvn -pl alppay-sdk-java -Dalppay.integration-tests=true -Dtest=PayOrderTest test
 ```
 
-原有 `release` profile 保留。对外发布 SDK 时，也需要先将其父 POM `com.aialphay.alppay:alppay:Final` 发布到接入方可访问的 Maven 仓库。
+GitHub Actions 会在推送新版本 tag（例如 `v1.0.1`）时构建并发布 SDK，发布版本取自 tag（`1.0.1`）。`release` profile 会生成独立 POM、源码包、Javadoc 和签名，接入方无需获取内部父 POM。账号配置、版本规则和发布命令见 [SDK 自动发布说明](../docs/sdk-publishing.md)。
 
 ## 快速开始
 

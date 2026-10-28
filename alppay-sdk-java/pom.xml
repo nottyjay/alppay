@@ -17,26 +17,27 @@
 
     <name>${project.groupId}:${project.artifactId}</name>
     <description>alppay java sdk</description>
-    <url>https://github.com/alphay-tech/alppay-sdk-java</url>
+    <url>${sdk.project.url}</url>
 
     <licenses>
         <license>
             <name>The MIT License</name>
-            <url>https://github.com/alphay-tech/alppay-sdk-java/blob/main/LICENSE</url>
+            <url>${sdk.project.url}/blob/${sdk.scm.tag}/alppay-sdk-java/LICENSE</url>
         </license>
     </licenses>
 
     <scm>
-        <connection>https://github.com/alphay-tech/alppay-sdk-java.git</connection>
-        <developerConnection>https://github.com/alphay-tech</developerConnection>
-        <url>https://github.com/alphay-tech/alppay-sdk-java</url>
+        <connection>scm:git:${sdk.project.url}.git</connection>
+        <developerConnection>scm:git:${sdk.project.url}.git</developerConnection>
+        <url>${sdk.project.url}</url>
+        <tag>${sdk.scm.tag}</tag>
     </scm>
 
     <developers>
         <developer>
             <name>alphay-tech</name>
             <email>jill@aialphay.com</email>
-            <url>https://github.com/alphay-tech/alppay-sdk-java</url>
+            <url>${sdk.project.url}</url>
             <organization>alphay-tech</organization>
             <organizationUrl>https://www.aialphay.com</organizationUrl>
         </developer>
@@ -45,6 +46,9 @@
     <properties>
         <!-- SDK 面向外部接入方，保留 Java 8 字节码和 API 兼容性。 -->
         <maven.compiler.release>8</maven.compiler.release>
+        <sdk.project.url>https://github.com/nottyjay/alppay</sdk.project.url>
+        <sdk.scm.tag>HEAD</sdk.scm.tag>
+        <central.skipUpload>false</central.skipUpload>
     </properties>
 
     <dependencies>
@@ -73,42 +77,74 @@
             <id>release</id>
             <build>
                 <plugins>
-                  <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-surefire-plugin</artifactId>
-                    <version>3.2.5</version>
-                    <configuration>
-                        <skipTests>true</skipTests>
-                    </configuration>
-                  </plugin>
-                    <!--   central发布插件    -->
                     <plugin>
-                        <groupId>org.sonatype.central</groupId>
-                        <artifactId>central-publishing-maven-plugin</artifactId>
-                        <version>0.9.0</version>
-                        <extensions>true</extensions>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>flatten-maven-plugin</artifactId>
+                        <version>1.8.0</version>
                         <configuration>
-                            <publishingServerId>central</publishingServerId>
-                            <autoPublish>true</autoPublish>
+                            <flattenMode>oss</flattenMode>
+                            <updatePomFile>true</updatePomFile>
+                            <pomElements>
+                                <build>remove</build>
+                                <repositories>remove</repositories>
+                            </pomElements>
                         </configuration>
+                        <executions>
+                            <execution>
+                                <id>flatten</id>
+                                <phase>process-resources</phase>
+                                <goals>
+                                    <goal>flatten</goal>
+                                </goals>
+                            </execution>
+                            <execution>
+                                <id>flatten-clean</id>
+                                <phase>clean</phase>
+                                <goals>
+                                    <goal>clean</goal>
+                                </goals>
+                            </execution>
+                        </executions>
                     </plugin>
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-release-plugin</artifactId>
-                        <version>2.5</version>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
                         <configuration>
-                            <autoVersionSubmodules>true</autoVersionSubmodules>
-                            <useReleaseProfile>false</useReleaseProfile>
-                            <releaseProfiles>release</releaseProfiles>
-                            <goals>deploy</goals>
+                            <doclint>none</doclint>
                         </configuration>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
                     </plugin>
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-gpg-plugin</artifactId>
                         <version>3.2.8</version>
                         <configuration>
-                            <executable>/usr/local/bin/gpg</executable>
+                            <bestPractices>true</bestPractices>
+                            <gpgArguments>
+                                <arg>--pinentry-mode</arg>
+                                <arg>loopback</arg>
+                            </gpgArguments>
                         </configuration>
                         <executions>
                             <execution>
@@ -121,35 +157,16 @@
                         </executions>
                     </plugin>
                     <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-source-plugin</artifactId>
-                        <version>3.0.1</version>
-                        <executions>
-                            <execution>
-                                <id>attach-sources</id>
-                                <goals>
-                                    <goal>jar-no-fork</goal>
-                                </goals>
-                            </execution>
-                        </executions>
-                    </plugin>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-javadoc-plugin</artifactId>
-                        <version>3.0.0</version>
-                        <executions>
-                            <execution>
-                                <id>attach-javadocs</id>
-                                <goals>
-                                    <goal>jar</goal>
-                                </goals>
-                                <!-- java8版本导致javadoc打包编译失败时候，添加-->
-                                <configuration>
-                                    <failOnError>false</failOnError>
-                                    <doclint>none</doclint>
-                                </configuration>
-                            </execution>
-                        </executions>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>0.12.0</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>true</autoPublish>
+                            <waitUntil>published</waitUntil>
+                            <skipUpload>${central.skipUpload}</skipUpload>
+                        </configuration>
                     </plugin>
                 </plugins>
             </build>

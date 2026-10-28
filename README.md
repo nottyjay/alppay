@@ -163,6 +163,8 @@ alipay运营平台和商户系统演体验：[https://www.aialphay.com/doc/detai
 
 ## SDK对接
 
+Java SDK 已纳入本项目统一管理。GitHub Actions 发布配置及所需凭据见 [SDK 自动发布说明](docs/sdk-publishing.md)。
+
 alipay已经开发了java和python的sdk，以及php对接的demo，方便接入方开发对接。
 
 sdk下载地址：https://doc.jeequan.com/#/integrate/open/api/116
